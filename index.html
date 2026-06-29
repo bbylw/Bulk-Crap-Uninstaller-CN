@@ -1092,7 +1092,7 @@
     <div class="topbar">
         <div class="topbar-inner">
             <div class="topbar-left">
-                <span class="topbar-item"><span class="status-dot"></span> BCU v6 · LATEST</span>
+                <span class="topbar-item"><span class="status-dot"></span> BCU <span data-version>v6.2</span> · LATEST</span>
                 <span class="topbar-item dim">WINDOWS · .NET 8</span>
                 <span class="topbar-item dim">APACHE 2.0</span>
             </div>
@@ -1120,7 +1120,7 @@
                 <li><a href="#requirements">要求</a></li>
                 <li><a href="#contribute">贡献</a></li>
             </ul>
-            <a href="#download" class="nav-cta">下载 v6</a>
+            <a href="#download" class="nav-cta" data-version>下载 v6.2</a>
         </div>
     </nav>
 
@@ -1167,7 +1167,7 @@
                     <div class="spec-row">
                         <span class="spec-num">01</span>
                         <span class="spec-label">最新版本</span>
-                        <span class="spec-value">v6.0</span>
+                        <span class="spec-value" data-version>v6.2</span>
                     </div>
                     <div class="spec-row">
                         <span class="spec-num">02</span>
@@ -1456,14 +1456,14 @@
 
             <div class="req-grid">
                 <div class="req-card reveal">
-                    <div class="req-version">VERSION · V6 · LATEST</div>
+                    <div class="req-version" data-version>VERSION · V6.2 · LATEST</div>
                     <h3>BCU <span class="italic">v6</span></h3>
                     <ul class="req-list">
                         <li><span><strong>最低操作系统</strong>Windows 10</span></li>
                         <li><span><strong>运行时</strong>.NET 8 桌面运行时（便携版不需要）</span></li>
                         <li><span><strong>注意</strong>由于支持的系统都没有 x86 版本，v6 不再包含 x86 构建</span></li>
                     </ul>
-                    <div class="req-foot">// 自 v6.0 起进入现代 .NET 时代</div>
+                    <div class="req-foot">// 自 <span data-version>v6.2</span> 起进入现代 .NET 时代</div>
                 </div>
 
                 <div class="req-card reveal" data-delay="1">
@@ -1569,6 +1569,27 @@
         }
         updateTime();
         setInterval(updateTime, 1000);
+
+        // 自动获取 GitHub 最新版本号
+        (async function syncVersion() {
+            const targets = document.querySelectorAll('[data-version]');
+            if (!targets.length) return;
+            try {
+                const res = await fetch('https://api.github.com/repos/Klocman/Bulk-Crap-Uninstaller/releases/latest', {
+                    headers: { 'Accept': 'application/vnd.github+json' }
+                });
+                if (!res.ok) throw new Error('GitHub API ' + res.status);
+                const data = await res.json();
+                const tag = (data.tag_name || '').replace(/^v/i, ''); // 6.2
+                if (!tag) return;
+                const versionTag = 'v' + tag; // v6.2
+                targets.forEach(el => {
+                    el.textContent = el.textContent.replace(/v\d+(\.\d+)*/i, versionTag);
+                });
+            } catch (e) {
+                console.warn('[BCU] 版本同步失败，使用内置版本：', e.message);
+            }
+        })();
 
         // 自定义光标
         const cursor = document.getElementById('cursor');
