@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCUninstaller — 批量卸载 · 极致干净</title>
+    <meta name="description" content="Bulk Crap Uninstaller (BCUninstaller) — 开源免费的 Windows 批量卸载工具。清理残留、检测孤立应用、批量静默卸载。">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,300..800;1,300..800&family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* ============================================
+           设计系统：工业技术文档美学
+           配色：奶白底 + 浓墨黑 + 警示橙
+           字体：Bricolage Grotesque + Instrument Serif + JetBrains Mono
+           ============================================ */
+
+        :root {
+            --paper: #f4efe6;
+            --paper-2: #ebe4d6;
+            --ink: #0a0a0a;
+            --ink-2: #1a1a1a;
+            --ink-soft: #2a2a2a;
+            --mute: #6b6358;
+            --line: #1a1a1a;
+            --accent: #ff4d00;
+            --accent-2: #ffb800;
+            --accent-soft: #ffe8d9;
+            --ok: #2d6a4f;
+
+            --font-display: "Bricolage Grotesque", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "PingFang SC", serif;
+            --font-italic: "Instrument Serif", "Bricolage Grotesque", "Noto Serif SC", serif;
+            --font-body: "Bricolage Grotesque", "Noto Serif SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+            --font-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+
+            --border: 1.5px solid var(--ink);
+            --border-bold: 2px solid var(--ink);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.55;
+            color: var(--ink);
+            background: var(--paper);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            font-feature-settings: "ss01", "ss02";
+        }
+
+        /* 纸张噪点纹理 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.6;
+            mix-blend-mode: multiply;
+        }
+
+        /* 选区颜色 */
+        ::selection { background: var(--accent); color: var(--paper); }
+
+        /* 自定义光标 */
+        .cursor {
+            width: 18px; height: 18px;
+            border: 1.5px solid var(--ink);
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: width 0.2s, height 0.2s, background 0.2s;
+            mix-blend-mode: difference;
+        }
+        .cursor.hover {
+            width: 36px; height: 36px;
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        a { color: inherit; text-decoration: none; }
+        button { font-family: inherit; cursor: pointer; border: none; background: none; }
+        img { max-width: 100%; display: block; }
+
+        /* ============================================
+           顶部状态条
+           ============================================ */
+        .topbar {
+            background: var(--ink);
+            color: var(--paper);
+            border-bottom: var(--border);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            position: relative;
+            z-index: 10;
+        }
+        .topbar-inner {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 6px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+        }
+        .topbar-left, .topbar-right {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        .status-dot {
+            width: 8px; height: 8px;
+            background: var(--accent-2);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        .topbar-item { color: var(--paper); }
+        .topbar-item.dim { color: #999; }
+
+        /* ============================================
+           导航栏
+           ============================================ */
+        .nav {
+            position: sticky;
+            top: 0;
+            background: var(--paper);
+            border-bottom: var(--border);
+            z-index: 100;
+        }
+        .nav-inner {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 16px 32px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 40px;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 22px;
+            letter-spacing: -0.02em;
+        }
+        .logo-mark {
+            width: 38px; height: 38px;
+            background: var(--ink);
+            color: var(--paper);
+            display: grid;
+            place-items: center;
+            font-family: var(--font-mono);
+            font-weight: 800;
+            font-size: 18px;
+            position: relative;
+        }
+        .logo-mark::after {
+            content: '';
+            position: absolute;
+            top: -3px; right: -3px;
+            width: 8px; height: 8px;
+            background: var(--accent);
+        }
+        .logo-text { display: flex; flex-direction: column; line-height: 1; }
+        .logo-text small {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 400;
+            color: var(--mute);
+            letter-spacing: 0.1em;
+            margin-top: 4px;
+        }
+
+        .nav-menu {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            list-style: none;
+        }
+        .nav-menu a {
+            padding: 8px 20px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-left: 1px dashed var(--ink);
+            transition: all 0.2s;
+        }
+        .nav-menu a:first-child { border-left: none; }
+        .nav-menu a:hover { background: var(--ink); color: var(--paper); }
+
+        .nav-cta {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            padding: 10px 18px;
+            background: var(--ink);
+            color: var(--paper);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .nav-cta:hover { background: var(--accent); }
+        .nav-cta::before {
+            content: '↓';
+            font-size: 14px;
+        }
+
+        /* ============================================
+           滚动跑马灯
+           ============================================ */
+        .marquee {
+            background: var(--accent);
+            color: var(--ink);
+            border-bottom: var(--border);
+            overflow: hidden;
+            padding: 10px 0;
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 17px;
+            letter-spacing: -0.01em;
+        }
+        .marquee-track {
+            display: flex;
+            gap: 40px;
+            white-space: nowrap;
+            animation: marquee 30s linear infinite;
+        }
+        .marquee-track span {
+            display: inline-flex;
+            align-items: center;
+            gap: 40px;
+        }
+        .marquee-track span::after {
+            content: '✦';
+            font-size: 14px;
+        }
+        @keyframes marquee {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+
+        /* ============================================
+           Hero 区
+           ============================================ */
+        .hero {
+            position: relative;
+            border-bottom: var(--border);
+            padding: 0;
+        }
+        .hero-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(to right, rgba(10,10,10,0.06) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(10,10,10,0.06) 1px, transparent 1px);
+            background-size: 80px 80px;
+            pointer-events: none;
+        }
+        .hero-inner {
+            position: relative;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 56px 32px 72px;
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 48px;
+            align-items: start;
+        }
+
+        .hero-meta {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .hero-meta::before {
+            content: '';
+            width: 40px; height: 1.5px;
+            background: var(--ink);
+        }
+
+        .hero-title {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: clamp(56px, 9vw, 140px);
+            line-height: 0.92;
+            letter-spacing: -0.04em;
+            margin-bottom: 28px;
+        }
+        .hero-title .word {
+            display: inline-block;
+        }
+        .hero-title .italic {
+            font-family: var(--font-italic);
+            font-style: italic;
+            font-weight: 400;
+            color: var(--accent);
+        }
+        .hero-title .stroke {
+            -webkit-text-stroke: 2px var(--ink);
+            color: transparent;
+        }
+
+        .hero-lead {
+            font-size: 18px;
+            line-height: 1.55;
+            color: var(--ink-soft);
+            max-width: 540px;
+            margin-bottom: 28px;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 0;
+            border: var(--border);
+            width: fit-content;
+        }
+        .btn {
+            padding: 16px 28px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+            border-right: var(--border);
+        }
+        .btn:last-child { border-right: none; }
+        .btn-primary { background: var(--ink); color: var(--paper); }
+        .btn-primary:hover { background: var(--accent); color: var(--paper); }
+        .btn-ghost { background: var(--paper); color: var(--ink); }
+        .btn-ghost:hover { background: var(--ink); color: var(--paper); }
+
+        /* Hero 右侧规格面板 */
+        .hero-panel {
+            border: var(--border);
+            background: var(--paper-2);
+            position: relative;
+        }
+        .hero-panel::before {
+            content: '';
+            position: absolute;
+            top: -1px; left: -1px; right: -1px;
+            height: 32px;
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    var(--ink) 0,
+                    var(--ink) 16px,
+                    var(--accent-2) 16px,
+                    var(--accent-2) 32px
+                );
+            border-bottom: var(--border);
+        }
+        .panel-head {
+            padding: 44px 24px 20px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--mute);
+            border-bottom: 1px dashed var(--ink);
+        }
+        .panel-body { padding: 20px 24px; }
+        .spec-row {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 20px;
+            padding: 12px 0;
+            border-bottom: 1px dashed var(--ink);
+            align-items: center;
+        }
+        .spec-row:last-child { border-bottom: none; }
+        .spec-num {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--mute);
+        }
+        .spec-label {
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .spec-value {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .panel-foot {
+            background: var(--ink);
+            color: var(--paper);
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+        .panel-foot .live {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-foot .live::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: var(--accent-2);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        /* ============================================
+           通用 section
+           ============================================ */
+        section { border-bottom: var(--border); position: relative; }
+        .container {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 72px 32px;
+        }
+
+        .section-head {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 48px;
+            margin-bottom: 48px;
+            align-items: end;
+        }
+        .section-num {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.15em;
+            color: var(--mute);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .section-num::before {
+            content: '';
+            width: 24px; height: 1.5px;
+            background: var(--ink);
+        }
+        .section-title {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: clamp(36px, 4.5vw, 60px);
+            line-height: 0.95;
+            letter-spacing: -0.03em;
+        }
+        .section-title .italic {
+            font-family: var(--font-italic);
+            font-style: italic;
+            font-weight: 400;
+        }
+        .section-title em {
+            color: var(--accent);
+            font-style: normal;
+        }
+
+        /* ============================================
+           About 区
+           ============================================ */
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+        }
+        .about-content p {
+            font-size: 17px;
+            color: var(--ink-soft);
+            margin-bottom: 16px;
+            max-width: 560px;
+        }
+        .about-content p .ink {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            border: var(--border);
+        }
+        .stat-cell {
+            padding: 24px 22px;
+            border-right: var(--border);
+            border-bottom: var(--border);
+            position: relative;
+            background: var(--paper);
+            transition: background 0.2s;
+        }
+        .stat-cell:hover { background: var(--accent-soft); }
+        .stat-cell:nth-child(2n) { border-right: none; }
+        .stat-cell:nth-last-child(-n+2) { border-bottom: none; }
+        .stat-num {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 44px;
+            line-height: 1;
+            letter-spacing: -0.04em;
+            margin-bottom: 6px;
+        }
+        .stat-num em {
+            font-family: var(--font-italic);
+            font-style: italic;
+            color: var(--accent);
+        }
+        .stat-num::after {
+            content: attr(data-suffix);
+            font-family: var(--font-mono);
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--mute);
+            margin-left: 4px;
+        }
+        .stat-label {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--mute);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        /* ============================================
+           Features 区
+           ============================================ */
+        .features { background: var(--ink); color: var(--paper); }
+        .features .section-num { color: #888; }
+        .features .section-num::before { background: var(--paper); }
+        .features .section-title em { color: var(--accent-2); }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border-top: var(--border);
+            border-left: var(--border);
+        }
+        .feature {
+            padding: 32px 28px;
+            border-right: var(--border);
+            border-bottom: var(--border);
+            position: relative;
+            transition: background 0.3s;
+            min-height: 260px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .feature:hover { background: var(--accent); color: var(--ink); }
+        .feature:hover .feature-num { color: var(--ink); }
+        .feature:hover .feature-icon svg { stroke: var(--ink); }
+
+        .feature-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+        .feature-num {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            color: #777;
+        }
+        .feature-icon {
+            width: 48px; height: 48px;
+        }
+        .feature-icon svg {
+            width: 100%; height: 100%;
+            stroke: var(--paper);
+            stroke-width: 1.5;
+            fill: none;
+            transition: stroke 0.3s;
+        }
+        .feature h3 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 26px;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+        .feature h3 .italic {
+            font-family: var(--font-italic);
+            font-style: italic;
+            font-weight: 400;
+        }
+        .feature p {
+            color: #b8b3a8;
+            font-size: 15px;
+            line-height: 1.55;
+        }
+        .feature:hover p { color: var(--ink-soft); }
+
+        /* ============================================
+           Download 区
+           ============================================ */
+        .download-list {
+            border: var(--border);
+        }
+        .download-item {
+            display: grid;
+            grid-template-columns: 80px 2fr 3fr auto;
+            align-items: center;
+            padding: 24px 32px;
+            border-bottom: var(--border);
+            gap: 32px;
+            transition: background 0.2s;
+            position: relative;
+        }
+        .download-item:last-child { border-bottom: none; }
+        .download-item:hover { background: var(--accent-soft); }
+        .download-item.featured {
+            background: var(--ink);
+            color: var(--paper);
+        }
+        .download-item.featured:hover { background: var(--accent); color: var(--ink); }
+        .download-item.featured .dl-tag { background: var(--accent); color: var(--ink); }
+        .download-item.featured .dl-icon { background: var(--paper); color: var(--ink); }
+        .download-item.featured .dl-meta { color: #999; }
+        .download-item.featured .dl-desc { color: #d4cfc4; }
+        .download-item.featured:hover .dl-desc { color: var(--ink-soft); }
+        .download-item.featured .dl-action { background: var(--paper); color: var(--ink); }
+        .download-item.featured:hover .dl-action { background: var(--ink); color: var(--paper); }
+
+        .dl-tag {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            padding: 6px 10px;
+            background: var(--ink);
+            color: var(--paper);
+            display: inline-block;
+            text-align: center;
+        }
+        .dl-info h3 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 22px;
+            letter-spacing: -0.02em;
+            margin-bottom: 4px;
+        }
+        .dl-meta {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--mute);
+        }
+        .dl-desc {
+            color: var(--ink-soft);
+            font-size: 15px;
+            line-height: 1.55;
+        }
+        .dl-action {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 14px 24px;
+            background: var(--ink);
+            color: var(--paper);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .dl-action:hover { background: var(--accent); }
+        .dl-action::after {
+            content: '→';
+            transition: transform 0.2s;
+        }
+        .dl-action:hover::after { transform: translateX(4px); }
+
+        .download-sources {
+            margin-top: 40px;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+        .sources-label {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--mute);
+        }
+        .sources-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+            border: var(--border);
+        }
+        .sources-list a {
+            padding: 14px 20px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 500;
+            border-right: var(--border);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .sources-list a:last-child { border-right: none; }
+        .sources-list a:hover { background: var(--ink); color: var(--paper); }
+
+        /* ============================================
+           Requirements 区
+           ============================================ */
+        .requirements { background: var(--ink); color: var(--paper); }
+        .requirements .section-num { color: #888; }
+        .requirements .section-num::before { background: var(--paper); }
+
+        .req-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+            border: var(--border);
+            border-color: var(--paper);
+        }
+        .req-card {
+            padding: 28px;
+            border-right: 1.5px solid var(--paper);
+            position: relative;
+        }
+        .req-card:last-child { border-right: none; }
+        .req-version {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.15em;
+            color: var(--accent-2);
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .req-version::after {
+            content: '●';
+            color: var(--accent-2);
+            font-size: 8px;
+            animation: pulse 2s infinite;
+        }
+        .req-card h3 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 26px;
+            letter-spacing: -0.02em;
+            margin-bottom: 20px;
+        }
+        .req-card h3 .italic {
+            font-family: var(--font-italic);
+            font-style: italic;
+            font-weight: 400;
+        }
+        .req-list {
+            list-style: none;
+            border-top: 1px dashed #444;
+        }
+        .req-list li {
+            padding: 12px 0;
+            border-bottom: 1px dashed #444;
+            display: grid;
+            grid-template-columns: 20px 1fr;
+            gap: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #d4cfc4;
+        }
+        .req-list li::before {
+            content: '▸';
+            color: var(--accent-2);
+            font-family: var(--font-mono);
+        }
+        .req-list li strong {
+            color: var(--paper);
+            display: block;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .req-foot {
+            margin-top: 20px;
+            padding-top: 20px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: #888;
+            line-height: 1.6;
+        }
+
+        /* ============================================
+           Terminal 区
+           ============================================ */
+        .terminal-section { background: var(--paper-2); }
+
+        .terminal-wrap {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 48px;
+            align-items: start;
+        }
+        .terminal-text h3 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 32px;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            margin-bottom: 16px;
+        }
+        .terminal-text h3 .italic {
+            font-family: var(--font-italic);
+            font-style: italic;
+            color: var(--accent);
+        }
+        .terminal-text p {
+            color: var(--ink-soft);
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+        .terminal-text ul {
+            list-style: none;
+        }
+        .terminal-text li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 6px 0;
+            font-size: 15px;
+            color: var(--ink-soft);
+        }
+        .terminal-text li::before {
+            content: counter(term-counter, decimal-leading-zero);
+            counter-increment: term-counter;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--accent);
+            font-weight: 600;
+            padding-top: 2px;
+        }
+        .terminal-text ul { counter-reset: term-counter; }
+
+        .terminal {
+            background: var(--ink);
+            color: var(--paper);
+            border: var(--border);
+            font-family: var(--font-mono);
+            box-shadow: 8px 8px 0 var(--ink);
+        }
+        .terminal-bar {
+            background: var(--ink-2);
+            padding: 12px 16px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .term-dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+        }
+        .term-dot.red { background: #ff5f57; }
+        .term-dot.yellow { background: #ffbd2e; }
+        .term-dot.green { background: #28c93f; }
+        .term-title {
+            margin-left: 12px;
+            font-size: 12px;
+            color: #999;
+        }
+        .terminal-body {
+            padding: 20px 24px;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+        .term-line { display: block; }
+        .term-prompt { color: var(--accent-2); }
+        .term-cmd { color: var(--paper); }
+        .term-out { color: #999; }
+        .term-accent { color: var(--accent); }
+        .term-ok { color: #4ade80; }
+        .term-cursor {
+            display: inline-block;
+            width: 8px; height: 16px;
+            background: var(--accent-2);
+            vertical-align: middle;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* ============================================
+           Contribute 区
+           ============================================ */
+        .contribute-inner {
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .contribute-inner .section-title {
+            font-size: clamp(40px, 5.5vw, 72px);
+            margin-bottom: 20px;
+        }
+        .contribute-inner p {
+            font-size: 17px;
+            color: var(--ink-soft);
+            margin-bottom: 32px;
+            max-width: 640px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .contribute-actions {
+            display: flex;
+            gap: 0;
+            justify-content: center;
+            border: var(--border);
+            width: fit-content;
+            margin: 0 auto;
+        }
+        .contribute-actions .btn {
+            padding: 18px 32px;
+        }
+
+        /* ============================================
+           Footer
+           ============================================ */
+        footer {
+            background: var(--ink);
+            color: var(--paper);
+            padding: 60px 0 24px;
+        }
+        .foot-inner {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+        .foot-top {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 48px;
+            padding-bottom: 40px;
+            border-bottom: 1px solid #333;
+        }
+        .foot-brand h3 {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 32px;
+            letter-spacing: -0.02em;
+            margin-bottom: 16px;
+        }
+        .foot-brand h3 .italic {
+            font-family: var(--font-italic);
+            font-style: italic;
+            color: var(--accent);
+        }
+        .foot-brand p {
+            color: #b8b3a8;
+            font-size: 15px;
+            line-height: 1.6;
+            max-width: 360px;
+        }
+        .foot-col h4 {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--accent-2);
+            margin-bottom: 20px;
+        }
+        .foot-col ul { list-style: none; }
+        .foot-col li { margin-bottom: 12px; }
+        .foot-col a {
+            color: #d4cfc4;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+        .foot-col a:hover { color: var(--accent); }
+
+        .foot-bot {
+            padding-top: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: #888;
+        }
+        .foot-bot-left { display: flex; gap: 24px; align-items: center; }
+
+        /* ============================================
+           滚动揭示动画
+           ============================================ */
+        .reveal {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.3, 1), transform 0.7s cubic-bezier(0.2, 0.7, 0.3, 1);
+        }
+        .reveal.in { opacity: 1; transform: translateY(0); }
+        .reveal[data-delay="1"] { transition-delay: 0.1s; }
+        .reveal[data-delay="2"] { transition-delay: 0.2s; }
+        .reveal[data-delay="3"] { transition-delay: 0.3s; }
+        .reveal[data-delay="4"] { transition-delay: 0.4s; }
+
+        /* 标题分行进入 */
+        .split-line {
+            display: block;
+            overflow: hidden;
+        }
+        .split-line > span {
+            display: inline-block;
+            transform: translateY(110%);
+            transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.3, 1);
+        }
+        .in .split-line > span { transform: translateY(0); }
+        .in .split-line[data-delay="1"] > span { transition-delay: 0.1s; }
+        .in .split-line[data-delay="2"] > span { transition-delay: 0.2s; }
+        .in .split-line[data-delay="3"] > span { transition-delay: 0.3s; }
+
+        /* ============================================
+           响应式
+           ============================================ */
+        @media (max-width: 1024px) {
+            .hero-inner { grid-template-columns: 1fr; min-height: auto; padding: 60px 32px 80px; }
+            .features-grid { grid-template-columns: repeat(2, 1fr); }
+            .req-grid { grid-template-columns: 1fr; }
+            .req-card { border-right: none; border-bottom: 1.5px solid var(--paper); }
+            .req-card:last-child { border-bottom: none; }
+            .terminal-wrap { grid-template-columns: 1fr; }
+            .foot-top { grid-template-columns: 1fr 1fr; gap: 40px; }
+            .section-head { grid-template-columns: 1fr; gap: 24px; }
+            .about-grid { grid-template-columns: 1fr; gap: 40px; }
+            .download-item { grid-template-columns: 60px 1fr; gap: 20px; }
+            .download-item .dl-desc, .download-item .dl-action {
+                grid-column: 2;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .nav-inner { grid-template-columns: auto auto; padding: 16px 20px; }
+            .nav-menu { display: none; }
+            .topbar-inner { padding: 8px 20px; font-size: 11px; }
+            .topbar-left .topbar-item:nth-child(n+3) { display: none; }
+            .container { padding: 60px 20px; }
+            .hero-inner { padding: 40px 20px 60px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .stat-grid { grid-template-columns: 1fr; }
+            .stat-cell { border-right: none; }
+            .stat-cell:nth-child(2n) { border-right: none; }
+            .foot-top { grid-template-columns: 1fr; }
+            .foot-bot { flex-direction: column; gap: 16px; }
+            .download-item { padding: 24px 20px; }
+            .dl-action { width: 100%; justify-content: center; }
+            .contribute-actions { flex-direction: column; }
+            .contribute-actions .btn { width: 100%; justify-content: center; }
+            .cursor { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="cursor" id="cursor"></div>
+
+    <!-- 顶部状态条 -->
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="topbar-left">
+                <span class="topbar-item"><span class="status-dot"></span> BCU v6 · LATEST</span>
+                <span class="topbar-item dim">WINDOWS · .NET 8</span>
+                <span class="topbar-item dim">APACHE 2.0</span>
+            </div>
+            <div class="topbar-right">
+                <span class="topbar-item dim">SYS</span>
+                <span class="topbar-item" id="liveTime">--:--:--</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导航 -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="#home" class="logo">
+                <div class="logo-mark">BCU</div>
+                <div class="logo-text">
+                    BCUninstaller
+                    <small>BULK · CRAP · UNINSTALLER</small>
+                </div>
+            </a>
+            <ul class="nav-menu">
+                <li><a href="#about">关于</a></li>
+                <li><a href="#features">功能</a></li>
+                <li><a href="#download">下载</a></li>
+                <li><a href="#requirements">要求</a></li>
+                <li><a href="#contribute">贡献</a></li>
+            </ul>
+            <a href="#download" class="nav-cta">下载 v6</a>
+        </div>
+    </nav>
+
+    <!-- 跑马灯 -->
+    <div class="marquee">
+        <div class="marquee-track">
+            <span>开源免费</span>
+            <span>批量静默卸载</span>
+            <span>残留清理</span>
+            <span>多平台兼容</span>
+            <span>Steam / Microsoft Store / NSIS / InnoSetup</span>
+            <span>开源免费</span>
+            <span>批量静默卸载</span>
+            <span>残留清理</span>
+            <span>多平台兼容</span>
+            <span>Steam / Microsoft Store / NSIS / InnoSetup</span>
+        </div>
+    </div>
+
+    <!-- Hero -->
+    <section class="hero" id="home">
+        <div class="hero-grid"></div>
+        <div class="hero-inner">
+            <div>
+                <div class="hero-meta reveal">— FREE · OPEN SOURCE · UNINSTALL BETTER</div>
+                <h1 class="hero-title reveal">
+                    <span class="split-line"><span>Uninstall</span></span>
+                    <span class="split-line" data-delay="1"><span>at <span class="italic">scale</span>,</span></span>
+                    <span class="split-line" data-delay="2"><span><span class="stroke">clean</span> with</span></span>
+                    <span class="split-line" data-delay="3"><span><span class="italic">care</span>.</span></span>
+                </h1>
+                <p class="hero-lead reveal" data-delay="4">
+                    Bulk Crap Uninstaller 是一款为 IT 专业人员打造的批量卸载工具 —— 彻底清理残留、检测孤立应用、运行预设卸载序列，让 Windows 保持真正的干净。
+                </p>
+                <div class="hero-actions reveal" data-delay="4">
+                    <a href="#download" class="btn btn-primary">立即下载</a>
+                    <a href="#about" class="btn btn-ghost">了解更多</a>
+                </div>
+            </div>
+
+            <div class="hero-panel reveal" data-delay="2">
+                <div class="panel-head">// SYSTEM_SPECS.json</div>
+                <div class="panel-body">
+                    <div class="spec-row">
+                        <span class="spec-num">01</span>
+                        <span class="spec-label">最新版本</span>
+                        <span class="spec-value">v6.0</span>
+                    </div>
+                    <div class="spec-row">
+                        <span class="spec-num">02</span>
+                        <span class="spec-label">许可证</span>
+                        <span class="spec-value">APACHE 2.0</span>
+                    </div>
+                    <div class="spec-row">
+                        <span class="spec-num">03</span>
+                        <span class="spec-label">支持平台</span>
+                        <span class="spec-value">WINDOWS 10+</span>
+                    </div>
+                    <div class="spec-row">
+                        <span class="spec-num">04</span>
+                        <span class="spec-label">运行时</span>
+                        <span class="spec-value">.NET 8</span>
+                    </div>
+                    <div class="spec-row">
+                        <span class="spec-num">05</span>
+                        <span class="spec-label">卸载器兼容</span>
+                        <span class="spec-value">NSIS · INNO</span>
+                    </div>
+                </div>
+                <div class="panel-foot">
+                    <span class="live">STATUS: READY</span>
+                    <span>BUILD: STABLE</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About -->
+    <section class="about" id="about">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="section-num">// 01 — ABOUT</div>
+                <h2 class="section-title">
+                    <span class="split-line"><span>重新定义</span></span>
+                    <span class="split-line" data-delay="1"><span>Windows <em>卸载体验</em>。</span></span>
+                </h2>
+            </div>
+
+            <div class="about-grid">
+                <div class="about-content">
+                    <p class="reveal">
+                        BCUninstaller (简称 BCU) 是一款<strong class="ink">自由（言论自由意义上）</strong>的程序卸载工具。它擅长以最少的用户操作批量卸载大量应用程序。
+                    </p>
+                    <p class="reveal" data-delay="1">
+                        它可以清理残留文件、检测孤立应用、根据预设列表运行卸载程序，还有更多功能。
+                    </p>
+                    <p class="reveal" data-delay="2">
+                        尽管 BCU 是为 IT 专业人员设计的，但任何对 Windows 中应用程序安装/卸载有基本了解的人都可以使用。
+                    </p>
+                    <p class="reveal" data-delay="3">
+                        采用 <strong class="ink">Apache 2.0</strong> 开源许可证，完全免费用于私人和商业用途。
+                    </p>
+                </div>
+
+                <div class="stat-grid reveal" data-delay="1">
+                    <div class="stat-cell">
+                        <div class="stat-num" data-suffix="+">100<em>%</em></div>
+                        <div class="stat-label">// OPEN SOURCE</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-num" data-suffix="K+">10<em>·</em></div>
+                        <div class="stat-label">// GITHUB STARS</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-num" data-suffix="×">∞</div>
+                        <div class="stat-label">// BATCH UNINSTALL</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-num" data-suffix=" yrs">10<em>+</em></div>
+                        <div class="stat-label">// ACTIVE DEVELOPMENT</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="section-num">// 02 — CAPABILITIES</div>
+                <h2 class="section-title">
+                    <span class="split-line"><span>专业级<em>卸载能力</em>，</span></span>
+                    <span class="split-line" data-delay="1"><span>全场景覆盖。</span></span>
+                </h2>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature reveal">
+                    <div class="feature-head">
+                        <span class="feature-num">F·01</span>
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 48 48"><rect x="8" y="8" width="32" height="32" rx="2"/><path d="M14 24h20M24 14v20"/></svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>批量<span class="italic">静默</span>卸载</h3>
+                        <p>一次选择并卸载多个应用程序，支持静默模式与自定义参数，效率倍增。</p>
+                    </div>
+                </div>
+
+                <div class="feature reveal" data-delay="1">
+                    <div class="feature-head">
+                        <span class="feature-num">F·02</span>
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 48 48"><path d="M8 16l16-8 16 8v16l-16 8-16-8z"/><path d="M8 16l16 8 16-8M24 24v16"/></svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>多<em>卸载系统</em></h3>
+                        <p>深度兼容 NSIS、InnoSetup、Msiexec 等主流安装框架，识别率行业领先。</p>
+                    </div>
+                </div>
+
+                <div class="feature reveal" data-delay="2">
+                    <div class="feature-head">
+                        <span class="feature-num">F·03</span>
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 48 48"><path d="M24 4l6 12 14 2-10 10 2 14-12-6-12 6 2-14L4 18l14-2z"/></svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>Microsoft <span class="italic">Store</span></h3>
+                        <p>完全兼容 Windows 应用商店应用、Steam 平台游戏及 Windows 功能组件。</p>
+                    </div>
+                </div>
+
+                <div class="feature reveal">
+                    <div class="feature-head">
+                        <span class="feature-num">F·04</span>
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="16"/><path d="M20 16l-2 16M28 16l2 16M16 22h16M16 30h16"/></svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>孤立应用<em>检测</em></h3>
+                        <p>智能扫描系统中已无主程序或被遗弃的孤立应用，识别可清理的潜在目标。</p>
+                    </div>
+                </div>
+
+                <div class="feature reveal" data-delay="1">
+                    <div class="feature-head">
+                        <span class="feature-num">F·05</span>
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 48 48"><path d="M10 14h28v24H10z"/><path d="M18 22h12M18 28h12M18 34h8"/></svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>深度<em>残留</em>清理</h3>
+                        <p>卸载后扫描文件、文件夹、注册表项，确保系统不留下任何痕迹。</p>
+                    </div>
+                </div>
+
+                <div class="feature reveal" data-delay="2">
+                    <div class="feature-head">
+                        <span class="feature-num">F·06</span>
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 48 48"><path d="M8 24h32M24 8v32"/><circle cx="24" cy="24" r="20"/></svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>自动化<em>卸载</em></h3>
+                        <p>支持预设列表与导入/导出配置，部署到多台设备时一键完成全部卸载任务。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Terminal / 流程展示 -->
+    <section class="terminal-section">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="section-num">// 03 — WORKFLOW</div>
+                <h2 class="section-title">
+                    <span class="split-line"><span>三步还原<em>纯净</em>系统。</span></span>
+                </h2>
+            </div>
+
+            <div class="terminal-wrap">
+                <div class="terminal-text reveal">
+                    <h3>从检测到清理，<span class="italic">全流程</span>可控。</h3>
+                    <p>BCU 不只是卸载器 —— 它是一套完整的应用生命周期管理工具。</p>
+                    <ul>
+                        <li>扫描所有已安装应用，按来源、占用空间、最后使用时间排序</li>
+                        <li>选择需要卸载的目标，配置静默参数与清理策略</li>
+                        <li>执行批量卸载，自动清理注册表、文件夹、计划任务等残留</li>
+                        <li>导出日志报告，便于审计与回溯</li>
+                    </ul>
+                </div>
+
+                <div class="terminal reveal" data-delay="1">
+                    <div class="terminal-bar">
+                        <span class="term-dot red"></span>
+                        <span class="term-dot yellow"></span>
+                        <span class="term-dot green"></span>
+                        <span class="term-title">~ / bcu-cli</span>
+                    </div>
+                    <div class="terminal-body">
+                        <span class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">bcu scan --all</span></span>
+                        <span class="term-line term-out">  → 检测到 247 个已安装应用</span>
+                        <span class="term-line term-out">  → 识别 12 个孤立应用</span>
+                        <span class="term-line term-out">  → 发现 3.2 GB 可清理空间</span>
+                        <span class="term-line">&nbsp;</span>
+                        <span class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">bcu uninstall --batch apps.list --silent</span></span>
+                        <span class="term-line term-accent">  ⚡ 启动批量卸载引擎...</span>
+                        <span class="term-line term-out">  [1/12] Adobe Reader XI</span>
+                        <span class="term-line term-out">  [2/12] WinRAR (trial)</span>
+                        <span class="term-line term-out">  [3/12] Nero 7 Essentials</span>
+                        <span class="term-line term-out">  ...</span>
+                        <span class="term-line term-ok">  ✓ 卸载完成，回收 3.2 GB</span>
+                        <span class="term-line">&nbsp;</span>
+                        <span class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">bcu clean --orphans</span><span class="term-cursor"></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download -->
+    <section class="download" id="download">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="section-num">// 04 — DOWNLOAD</div>
+                <h2 class="section-title">
+                    <span class="split-line"><span>选择适合<em>您的</em>版本。</span></span>
+                </h2>
+            </div>
+
+            <div class="download-list">
+                <div class="download-item featured reveal">
+                    <span class="dl-tag">SETUP</span>
+                    <div class="dl-info">
+                        <h3>安装版</h3>
+                        <div class="dl-meta">// RECOMMENDED · 自动安装 .NET 运行时</div>
+                    </div>
+                    <div class="dl-desc">将 BCU 作为普通应用程序安装。如果您的系统缺少所需的 .NET 运行时，它也会自动安装。最适合个人用户。</div>
+                    <a href="https://github.com/Klocman/Bulk-Crap-Uninstaller/releases" class="dl-action">下载安装版</a>
+                </div>
+
+                <div class="download-item reveal" data-delay="1">
+                    <span class="dl-tag">PORTABLE</span>
+                    <div class="dl-info">
+                        <h3>便携版</h3>
+                        <div class="dl-meta">// NO INSTALL · 内置 .NET 运行时</div>
+                    </div>
+                    <div class="dl-desc">独立版本，不需要 .NET 运行时即可运行。包含运行时，文件较大但开箱即用，适合 U 盘携带。</div>
+                    <a href="https://github.com/Klocman/Bulk-Crap-Uninstaller/releases" class="dl-action">下载便携版</a>
+                </div>
+
+                <div class="download-item reveal" data-delay="2">
+                    <span class="dl-tag">NET</span>
+                    <div class="dl-info">
+                        <h3>Net 版</h3>
+                        <div class="dl-meta">// LIGHTWEIGHT · 需要 .NET 8</div>
+                    </div>
+                    <div class="dl-desc">独立便携版本，需要安装 .NET 运行时。文件大小比完整便携版小得多，适合追求体积的极客用户。</div>
+                    <a href="https://github.com/Klocman/Bulk-Crap-Uninstaller/releases" class="dl-action">下载 Net 版</a>
+                </div>
+            </div>
+
+            <div class="download-sources reveal">
+                <div class="sources-label">// 镜像源</div>
+                <div class="sources-list">
+                    <a href="https://dappcdn.com/download/utilities/bulk-crap-uninstaller" target="_blank">↓ dAppCDN</a>
+                    <a href="https://www.fosshub.com/Bulk-Crap-Uninstaller.html" target="_blank">↓ FossHub</a>
+                    <a href="https://sourceforge.net/projects/bulk-crap-uninstaller/" target="_blank">↓ SourceForge</a>
+                    <a href="https://github.com/Klocman/Bulk-Crap-Uninstaller/actions/workflows/ci.yaml" target="_blank">↓ 每日构建版</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Requirements -->
+    <section class="requirements" id="requirements">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="section-num">// 05 — SYSTEM</div>
+                <h2 class="section-title">
+                    <span class="split-line"><span>系统<em>兼容性</em>矩阵。</span></span>
+                </h2>
+            </div>
+
+            <div class="req-grid">
+                <div class="req-card reveal">
+                    <div class="req-version">VERSION · V6 · LATEST</div>
+                    <h3>BCU <span class="italic">v6</span></h3>
+                    <ul class="req-list">
+                        <li><span><strong>最低操作系统</strong>Windows 10</span></li>
+                        <li><span><strong>运行时</strong>.NET 8 桌面运行时（便携版不需要）</span></li>
+                        <li><span><strong>注意</strong>由于支持的系统都没有 x86 版本，v6 不再包含 x86 构建</span></li>
+                    </ul>
+                    <div class="req-foot">// 自 v6.0 起进入现代 .NET 时代</div>
+                </div>
+
+                <div class="req-card reveal" data-delay="1">
+                    <div class="req-version">VERSION · V5 · LEGACY</div>
+                    <h3>BCU <span class="italic">v5</span></h3>
+                    <ul class="req-list">
+                        <li><span><strong>最低操作系统</strong>Windows 7 SP1 + 平台更新</span></li>
+                        <li><span><strong>所需补丁</strong>KB2670838, KB2533623 等</span></li>
+                        <li><span><strong>运行时</strong>.NET 6 桌面运行时（便携版不需要）</span></li>
+                        <li><span><strong>故障排查</strong>DLL 错误请运行 Windows Update</span></li>
+                    </ul>
+                    <div class="req-foot">// 仍支持 Windows 7 的最后版本</div>
+                </div>
+
+                <div class="req-card reveal" data-delay="2">
+                    <div class="req-version">VERSION · V1-V4 · ARCHIVE</div>
+                    <h3>BCU <span class="italic">legacy</span></h3>
+                    <ul class="req-list">
+                        <li><span><strong>最低操作系统</strong>Windows XP</span></li>
+                        <li><span><strong>运行时</strong>.NET Framework 4.5</span></li>
+                        <li><span><strong>替代方案</strong>3.5 上可运行但功能受限</span></li>
+                        <li><span><strong>获取</strong>编译 legacy-4.x 分支或下载 4.16</span></li>
+                    </ul>
+                    <div class="req-foot">// 历史版本，仅供考古</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contribute -->
+    <section class="contribute" id="contribute">
+        <div class="container">
+            <div class="contribute-inner">
+                <div class="section-num reveal" style="justify-content: center; margin-bottom: 24px;">// 06 — CONTRIBUTE</div>
+                <h2 class="section-title reveal">
+                    <span class="split-line"><span>加入 <em>开源</em>，</span></span>
+                    <span class="split-line" data-delay="1"><span>让它更<em>好</em>。</span></span>
+                </h2>
+                <p class="reveal" data-delay="2">
+                    我们欢迎所有形式的贡献 —— 代码、问题、文档、本地化。<br>
+                    开发在 Visual Studio 2022 上进行，安装程序使用 InnoSetup v6.4 编译。
+                </p>
+                <div class="contribute-actions reveal" data-delay="3">
+                    <a href="https://github.com/BCUninstaller/Bulk-Crap-Uninstaller/blob/master/CONTRIBUTING.md" class="btn btn-primary" target="_blank">阅读贡献指南</a>
+                    <a href="https://github.com/Klocman/Bulk-Crap-Uninstaller" class="btn btn-ghost" target="_blank">访问 GitHub 仓库</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="foot-inner">
+            <div class="foot-top">
+                <div class="foot-brand">
+                    <h3>BCU<span class="italic">ninstaller</span></h3>
+                    <p>开源免费的批量卸载工具，让 Windows 系统保持干净整洁。采用 Apache 2.0 许可证发布。</p>
+                </div>
+                <div class="foot-col">
+                    <h4>产品</h4>
+                    <ul>
+                        <li><a href="#download">下载</a></li>
+                        <li><a href="#features">功能</a></li>
+                        <li><a href="#requirements">系统要求</a></li>
+                        <li><a href="https://www.bcuninstaller.com/" target="_blank">官方主页</a></li>
+                    </ul>
+                </div>
+                <div class="foot-col">
+                    <h4>资源</h4>
+                    <ul>
+                        <li><a href="https://htmlpreview.github.io/?https://github.com/Klocman/Bulk-Crap-Uninstaller/blob/master/doc/BCU_manual.html" target="_blank">在线文档</a></li>
+                        <li><a href="https://github.com/Klocman/Bulk-Crap-Uninstaller/issues/new" target="_blank">提交问题</a></li>
+                        <li><a href="https://github.com/Klocman/Bulk-Crap-Uninstaller/discussions/289" target="_blank">寻找维护者</a></li>
+                    </ul>
+                </div>
+                <div class="foot-col">
+                    <h4>项目</h4>
+                    <ul>
+                        <li><a href="https://github.com/Klocman/Bulk-Crap-Uninstaller" target="_blank">GitHub 仓库</a></li>
+                        <li><a href="https://github.com/BCUninstaller/Bulk-Crap-Uninstaller/blob/master/CONTRIBUTING.md" target="_blank">贡献指南</a></li>
+                        <li><a href="https://github.com/Klocman/Bulk-Crap-Uninstaller/blob/master/Licence.txt" target="_blank">许可证</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="foot-bot">
+                <div class="foot-bot-left">
+                    <span>© 2026 BCUninstaller Project</span>
+                    <span>·</span>
+                    <span>Apache License 2.0</span>
+                </div>
+                <span>// EOF</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // 实时时间
+        const timeEl = document.getElementById('liveTime');
+        function updateTime() {
+            const d = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            timeEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        // 自定义光标
+        const cursor = document.getElementById('cursor');
+        let mx = 0, my = 0, cx = 0, cy = 0;
+        document.addEventListener('mousemove', e => {
+            mx = e.clientX; my = e.clientY;
+        });
+        function animateCursor() {
+            cx += (mx - cx) * 0.18;
+            cy += (my - cy) * 0.18;
+            cursor.style.left = cx + 'px';
+            cursor.style.top = cy + 'px';
+            requestAnimationFrame(animateCursor);
+        }
+        animateCursor();
+
+        document.querySelectorAll('a, button, .feature, .download-item, .sources-list a').forEach(el => {
+            el.addEventListener('mouseenter', () => cursor.classList.add('hover'));
+            el.addEventListener('mouseleave', () => cursor.classList.remove('hover'));
+        });
+
+        // 滚动揭示
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('in');
+                    revealObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
+
+        document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+        // 导航高亮
+        const sections = document.querySelectorAll('section[id]');
+        const navLinks = document.querySelectorAll('.nav-menu a');
+        const navObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id;
+                    navLinks.forEach(link => {
+                        link.style.background = '';
+                        link.style.color = '';
+                        if (link.getAttribute('href') === '#' + id) {
+                            link.style.background = 'var(--ink)';
+                            link.style.color = 'var(--paper)';
+                        }
+                    });
+                }
+            });
+        }, { rootMargin: '-40% 0px -50% 0px' });
+        sections.forEach(s => navObserver.observe(s));
+    </script>
+</body>
+</html>
